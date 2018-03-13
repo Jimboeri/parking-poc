@@ -1,6 +1,7 @@
 // **********************************************************************************
-// WD Version 0.3
-// nrf8001 Bluetooth that might work with RFM95 9.15mhz LoRa
+// lora_car
+// sketch for in vehicle LoRa beacon
+// Version 0.3
 // **********************************************************************************
 
 #include <SPI.h>            //included in Arduino IDE (www.arduino.cc)
@@ -9,6 +10,7 @@
 
 #define INITIAL_SETUP // uncomment this for an initial setup of a moteino
 
+// define device specific settings
 #define RF95_FREQ 915.0
 #define led       9       // Moteinos have LEDs on D9
 #define FLASH_SS  8       // and FLASH SS on D8
@@ -23,14 +25,16 @@
 // EEPROM Parameter offsets
 #define NODE 101
 #define REGISTRATION 110
+#define TXDELAY 120
 
 // *************************************************************
 // General variable declarations
 
 char sendBuffer[50];                  // char array used to send data
-long int timeCtr = 0L;                // var used to store millis value so led can be non-blocking
+long int timeCtr = 1000L;                // var used to store millis value so led can be non-blocking
 char registration[] = "TEST01";       // var to hold rego
 int node = 1;                         // var to hold node number
+int txDelay = 3;                     // var hold seconds between transmissions
 
 //************************************ Load Drivers ****************************************
 // wd load driver instance of the radio and name it "rf95"
@@ -45,21 +49,26 @@ void setup()
   // Enable the led as an output
   pinMode(led, OUTPUT);  // initialize digital pin LED_BUILTIN as an output.
 
+  // serup serial channel
   Serial.begin(SERIAL_BAUD);
   Serial.println("Car module start");
 
   // if this is an initial set up, store defaults in EEPROM, otherwise read them
 #ifdef INITIAL_SETUP
-  EEPROM.put(NODE, node);              // temp to set up node
-  EEPROM.put(REGISTRATION, registration);        // temp to set up gateway
+  EEPROM.put(NODE, node);                     // initial set up node
+  EEPROM.put(REGISTRATION, registration);     // initial set up gateway
+  EEPROM.put(TXDELAY, txDelay);               // initial set up gateway
+  Serial.println("Initial setup - values stored in EEPROM");
 #endif
-  EEPROM.get(NODE, node);              // temp to set up node
-  EEPROM.get(REGISTRATION, registration);        // temp to set up gateway
-
+  EEPROM.get(NODE, node);                     // set up node
+  EEPROM.get(REGISTRATION, registration);     // registration
+  EEPROM.get(TXDELAY, txDelay);               // transmit delay
   Serial.print("Node: ");
   Serial.print(node);
   Serial.print(" and registration : ");
   Serial.println(registration);
+  Serial.print("Seconds delay between transmissions : ");
+  Serial.println(txDelay);
 
   pinMode(RFM95_RST, OUTPUT);
   digitalWrite(RFM95_RST, HIGH);
@@ -85,36 +94,36 @@ void setup()
   rf95.setTxPower(5, false);
   //wd rf95.setModemConfig(RH_RF95::Bw31_25Cr48Sf512); //configure modem for long range?
   //wd rf95.printRegisters();  //Print all the RFM95 register values
+
+  Serial.println("Setup complete");
+  Serial.println();
+
 }
 
-
-// wd variables
-//wd char BLEstr[10];
-//char buffer[50];
-
-//char* Nodestr = "AKCCBLE"; //first chracter in string, node ID
-//char* BLEstr = "Test";     //BLE chracter in string
-//char* Endstr = "";     //last chracter in string
-//byte sendLen;
-
-//uint8_t buf[RH_RF95_MAX_MESSAGE_LEN]; //wd keep outside loop to avoid replys in klingon
 
 //************************************ Start Loop ************************************************************
 void loop()
 {
 
+  // check to see if time counter has been exceeded
+  if (millis() > (timeCtr + (txDelay * 1000)))
+  {
+    send_radio_msg(registration);
+    timeCtr = millis();
+    digitalWrite(led, HIGH);
+  }
 
-  //wd rf95.send((uint8_t *) buffer, sendLen); // wd works kind of
-  //rf95.send(buffer, sendLen);
-  send_radio_msg("AAA555");
+  // turn the led off a second after transmission
+  if (millis() > (timeCtr + 1000))
+  {
+    digitalWrite(led, LOW);
+  }
 
-
-  // wd flash the led at the end of the loop.
-  digitalWrite(led, HIGH);
-  delay(100);
-  digitalWrite(led, LOW);
-  delay(6000);
-  //
+  // this covers situations where the millis counter comes back to 0, every 3 months or so
+  if (millis() < (timeCtr - 100000000))
+  {
+    timeCtr = millis();
+  }
 }
 
 //*******************************************************************************************
@@ -124,7 +133,7 @@ void loop()
 void send_radio_msg(char rego[])
 {
   // sprintf creates the string to transmit
-  sprintf(sendBuffer, "%s,%s", "V", rego);
+  sprintf(sendBuffer, "%s,%s]", "V", rego);
   Serial.print("Send Data: ");
   Serial.print(sendBuffer);
   Serial.println();
@@ -137,4 +146,5 @@ void send_radio_msg(char rego[])
     Serial.println("Send error");
 
 }
+
 

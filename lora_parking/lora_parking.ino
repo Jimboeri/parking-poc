@@ -63,7 +63,7 @@ void loop()
 
       for (int i = 0; i < 50; i++)
       {
-        if (buf[i] == 40)
+        if (buf[i] == 93)
         {
           Serial.print(" in ");
           Serial.print(i+1);
