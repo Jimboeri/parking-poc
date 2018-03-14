@@ -8,7 +8,7 @@
 #include <RH_RF95.h>
 #include <EEPROM.h>         // used to store parameters, in specific the time interval between reading transmissions
 
-#define INITIAL_SETUP // uncomment this for an initial setup of a moteino
+//#define INITIAL_SETUP // uncomment this for an initial setup of a moteino
 
 // define device specific settings
 #define RF95_FREQ 915.0
@@ -20,6 +20,7 @@
 
 #define SERIAL_BAUD 115200
 #define LENGTH_REGO 6
+#define LED_DURATION 400
 
 // ***********************************************************
 // EEPROM Parameter offsets
@@ -37,9 +38,7 @@ int node = 1;                         // var to hold node number
 int txDelay = 3;                     // var hold seconds between transmissions
 
 //************************************ Load Drivers ****************************************
-// wd load driver instance of the radio and name it "rf95"
-//RH_RF95 rf95;
-//RH_RF95 rf95(RFM95_CS, RFM95_INT);
+//  load driver instance of the radio and name it "rf95"
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
 
 
@@ -49,7 +48,7 @@ void setup()
   // Enable the led as an output
   pinMode(led, OUTPUT);  // initialize digital pin LED_BUILTIN as an output.
 
-  // serup serial channel
+  // setup serial channel
   Serial.begin(SERIAL_BAUD);
   Serial.println("Car module start");
 
@@ -105,22 +104,24 @@ void setup()
 void loop()
 {
 
+  // Serial.println(millis());
   // check to see if time counter has been exceeded
   if (millis() > (timeCtr + (txDelay * 1000)))
   {
+    //Serial.println("Time to send a message");
     send_radio_msg(registration);
     timeCtr = millis();
     digitalWrite(led, HIGH);
   }
 
   // turn the led off a second after transmission
-  if (millis() > (timeCtr + 1000))
+  if (millis() > (timeCtr + LED_DURATION))
   {
     digitalWrite(led, LOW);
   }
 
   // this covers situations where the millis counter comes back to 0, every 3 months or so
-  if (millis() < (timeCtr - 100000000))
+  if (millis() < (timeCtr - 1))
   {
     timeCtr = millis();
   }
@@ -133,16 +134,14 @@ void loop()
 void send_radio_msg(char rego[])
 {
   // sprintf creates the string to transmit
-  sprintf(sendBuffer, "%s,%s]", "V", rego);
+  sprintf(sendBuffer, "%s,%d,%s]", "V", node, rego);
   Serial.print("Send Data: ");
   Serial.print(sendBuffer);
   Serial.println();
 
   // in the send command '(uint8_t *) sendBuffer' casts the proper data type
   // example taken from thread https://lowpowerlab.com/forum/rf-range-antennas-rfm69-library/sending-first-packet-with-rfm95-lora-module/
-  if (rf95.send((uint8_t *) sendBuffer, strlen(sendBuffer)))
-    Serial.println("Sent OK");
-  else
+  if (!rf95.send((uint8_t *) sendBuffer, strlen(sendBuffer)))
     Serial.println("Send error");
 
 }
