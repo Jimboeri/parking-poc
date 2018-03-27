@@ -8,7 +8,7 @@
 #include <RH_RF95.h>
 #include <EEPROM.h>         // used to store parameters, in specific the time interval between reading transmissions
 
-//#define INITIAL_SETUP // uncomment this for an initial setup of a moteino
+#define INITIAL_SETUP // uncomment this for an initial setup of a moteino
 
 // define device specific settings
 #define RF95_FREQ 915.0
@@ -17,6 +17,7 @@
 #define RFM95_CS  10      //wd NSS pin 10 for rf95 radio on Moteino
 #define RFM95_RST 9       //wd reset not used
 #define RFM95_INT 2
+#define RFM95_POWER 5
 
 #define SERIAL_BAUD 115200
 #define LENGTH_REGO 6
@@ -33,8 +34,8 @@
 
 char sendBuffer[50];                  // char array used to send data
 long int timeCtr = 1000L;                // var used to store millis value so led can be non-blocking
-char registration[] = "TEST01";       // var to hold rego
-int node = 1;                         // var to hold node number
+char registration[] = "TEST02";       // var to hold rego
+int node = 12;                         // var to hold node number
 int txDelay = 3;                     // var hold seconds between transmissions
 
 //************************************ Load Drivers ****************************************
@@ -90,9 +91,9 @@ void setup()
 
   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then
   // you can set transmitter powers from 5 to 23 dBm:
-  rf95.setTxPower(5, false);
+  rf95.setTxPower(RFM95_POWER, false);
+  Serial.print("Set power level to: "); Serial.println(RFM95_POWER);
   //wd rf95.setModemConfig(RH_RF95::Bw31_25Cr48Sf512); //configure modem for long range?
-  //wd rf95.printRegisters();  //Print all the RFM95 register values
 
   Serial.println("Setup complete");
   Serial.println();
@@ -134,7 +135,7 @@ void loop()
 void send_radio_msg(char rego[])
 {
   // sprintf creates the string to transmit
-  sprintf(sendBuffer, "%s,%d,%s]", "V", node, rego);
+  sprintf(sendBuffer, "%s,%d,%s", "V", node, rego);
   Serial.print("Send Data: ");
   Serial.print(sendBuffer);
   Serial.println();

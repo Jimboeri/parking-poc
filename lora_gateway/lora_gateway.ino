@@ -1,6 +1,6 @@
 // **********************************************************************************
-// lora_parking
-// sketch for in vehicle LoRa beacon
+// lora_gateway
+// sketch for gateway lora to Raspberry Pi
 // Version 0.1
 // **********************************************************************************
 
@@ -8,7 +8,7 @@
 #include <RH_RF95.h>
 #include <EEPROM.h>         // used to store parameters, in specific the time interval between reading transmissions
 
-#define INITIAL_SETUP // uncomment this for an initial setup of a moteino
+//#define INITIAL_SETUP // uncomment this for an initial setup of a moteino
 
 // define device specific settings
 #define RF95_FREQ 915.0
@@ -17,30 +17,23 @@
 #define RFM95_CS  10      //wd NSS pin 10 for rf95 radio on Moteino
 #define RFM95_RST 9       //wd reset not used
 #define RFM95_INT 2
-#define RFM95_POWER 20
+#define RFM95_POWER 8
 #define BUFFER_LEN 50
 
 #define SERIAL_BAUD 115200
 #define LENGTH_PARK_REF 10
 #define LED_DURATION 400
 
-// ***********************************************************
-// EEPROM Parameter offsets
-#define PARK_NODE 101
-#define PARK_REF 110
-#define TXDELAY 140
-
 // *************************************************************
 // General variable declarations
 
 char radioBuffer[BUFFER_LEN];     // char array used to receive data
-char sendBuffer[BUFFER_LEN];      // char array used to send data
 long int timeCtr = 1000L;         // var used to store millis value so led can be non-blocking
-char park_ref[] = "TEST";         // var to hold rego
-char park_node[] = "1001";        // var to hold node number
 int txDelay = 3;                  // var hold seconds between transmissions
 int strIndex = 0;                 // var used for string manipulation
+int prevIndex = 0;                // var used for string manipulation
 int inRSSI = 0;                   // var for incoming signal strength
+char quote = 22;
 
 //************************************ Load Drivers ****************************************
 //  load driver instance of the radio and name it "rf95"
@@ -54,24 +47,7 @@ void setup()
 
   // setup serial channel
   Serial.begin(SERIAL_BAUD);
-  Serial.println("Parking module start");
-
-  // if this is an initial set up, store defaults in EEPROM, otherwise read them
-#ifdef INITIAL_SETUP
-  EEPROM.put(PARK_NODE, park_node);                     // initial set up node
-  EEPROM.put(PARK_REF, park_ref);     // initial set up gateway
-  EEPROM.put(TXDELAY, txDelay);               // initial set up gateway
-  Serial.println("Initial setup - values stored in EEPROM");
-#endif
-  EEPROM.get(PARK_NODE, park_node);                     // set up node
-  EEPROM.get(PARK_REF, park_ref);     // registration
-  //EEPROM.get(TXDELAY, txDelay);               // transmit delay
-  Serial.print("Node: ");
-  Serial.print(park_node);
-  Serial.print(" and parking reference : ");
-  Serial.println(park_ref);
-  //Serial.print("Seconds delay between transmissions : ");
-  //Serial.println(txDelay);
+  Serial.println("Gateway module start");
 
   pinMode(RFM95_RST, OUTPUT);
   digitalWrite(RFM95_RST, HIGH);
@@ -80,7 +56,6 @@ void setup()
   delay(10);
   digitalWrite(RFM95_RST, HIGH);
   delay(10);
-
 
   //wd initialise radio
   if (!rf95.init())
@@ -112,27 +87,53 @@ void loop()
       digitalWrite(led, HIGH);
       timeCtr = millis();
 
-      if (radioBuffer[0] == 'V')
+      if (radioBuffer[0] == 'P')
       {
-        Serial.print("Vehicle message received from node ");
+        //Serial.println(radioBuffer);
+        //Serial.print("Parking message received from node ");
         // move the input to a string for easier management
         String radioIn = radioBuffer;
 
-        // the string starts "V," after that is the vehicle node number. Find the posn of the next comma
+        Serial.print("{\x22vehicleNode\x22:");
+        // Start with the vehicle node number
+        // the string starts "P," after that is the parking node number. Find the posn of the next comma
         strIndex = radioIn.indexOf(',', 2);
         // Store the vehicle node
         String inNode = radioIn.substring(2, strIndex);
         Serial.print(inNode);
-        Serial.print(" with registration ");
 
-        String inReg = radioIn.substring(strIndex + 1, len);
+        // Now the vehicl registration
+        // the string the string continues with comma, then the registration number
+        prevIndex = strIndex;
+        strIndex = radioIn.indexOf(',', prevIndex + 1);
+        String inReg = radioIn.substring(prevIndex + 1, strIndex);
+        //Serial.print(" with registration ");
+        Serial.print(",\x22vehicleRegistration\x22:\x22");
         Serial.print(inReg);
-        Serial.print(" RSSI is ");
 
+        // next the parking node number
+        // the string the string continues with comma, then the parking sensor node number
+        prevIndex = strIndex;
+        strIndex = radioIn.indexOf(',', prevIndex + 1);
+        String parkNode = radioIn.substring(prevIndex + 1, strIndex);
+        //Serial.print(" from parking sensor ");
+        Serial.print("\x22,\x22parkingNode\x22:");
+        Serial.print(parkNode);
+
+        // next the parking reference
+        // the string the string continues with comma, then the parking sensor node number
+        prevIndex = strIndex;
+        strIndex = radioIn.indexOf(',', prevIndex + 1);
+        String parkRef = radioIn.substring(prevIndex + 1, strIndex);
+        //Serial.print(" reference ");
+        Serial.print(",\x22parkingReference\x22:\x22");
+        Serial.print(parkRef);
+
+        //Serial.print(" RSSI is ");
+        Serial.print("\x22,\x22RSSI\x22:");
         inRSSI = rf95.lastRssi();
-        Serial.println(inRSSI);
-
-        send_radio_msg(inReg, inNode);
+        Serial.print(inRSSI);
+        Serial.println('}');
 
       }
     }
@@ -141,43 +142,6 @@ void loop()
   {
     digitalWrite(led, LOW);
   }
-}
-
-//*******************************************************************************************
-// Generic routine for sending a radio message
-// the vehicle registration is the only parameter
-int strLen = 0;
-char cRego[8];
-char cVehNode[8];
-void send_radio_msg(String rego, String inNode)
-{
-  // make a char array for the rego
-  strLen = rego.length();
-  //char cRego[strLen];
-  rego.toCharArray(cRego, strLen + 1);
-  Serial.print("Rego to send is ");
-  Serial.println(cRego);
-
-  // make a char array for the vehicle node
-  strLen = inNode.length();
-  inNode.toCharArray(cVehNode, strLen + 1);
-  Serial.print("Vehicle node to send is ");
-  Serial.print(cVehNode);
-  Serial.print(" original was ");
-  Serial.println(inNode);
-
-  // sprintf creates the string to transmit
-  sprintf(sendBuffer, "P,%s,%s,%s,%s", cVehNode, cRego, park_node, park_ref);
-  Serial.print("Radio transmission should be ");
-  Serial.println(sendBuffer);
-  Serial.println("******************************************************************************");
-  // in the send command '(uint8_t *) sendBuffer' casts the proper data type
-  // example taken from thread https://lowpowerlab.com/forum/rf-range-antennas-rfm69-library/sending-first-packet-with-rfm95-lora-module/
-
-  //jw, the sketch seems to restart as soon as the message is sent, need to fix this
-  rf95.send((uint8_t *) sendBuffer, sizeof(sendBuffer));
-  rf95.waitPacketSent();
-
 }
 
 

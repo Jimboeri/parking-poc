@@ -72,6 +72,8 @@ void setup()
 //************************************ Start Loop ************************************************************
 void loop()
 {
+  // Initialise the radio buffer with space
+  strncpy(radioBuffer, "                                               ", 50);
   if (rf95.available())
   {
  
