@@ -8,7 +8,7 @@
 #include <RH_RF95.h>
 #include <EEPROM.h>         // used to store parameters, in specific the time interval between reading transmissions
 
-#define INITIAL_SETUP // uncomment this for an initial setup of a moteino
+//#define INITIAL_SETUP // uncomment this for an initial setup of a moteino
 
 // define device specific settings
 #define RF95_FREQ 915.0
@@ -34,9 +34,18 @@
 
 char sendBuffer[50];                  // char array used to send data
 long int timeCtr = 1000L;                // var used to store millis value so led can be non-blocking
-char registration[] = "TEST02";       // var to hold rego
+char registration[] = "VAN002";       // var to hold rego
 int node = 12;                         // var to hold node number
-int txDelay = 3;                     // var hold seconds between transmissions
+int txDelay = 15;                     // var hold seconds between transmissions
+
+// **************************************************************
+// Declarations for serial comms
+String inputString = "";         // a string to hold incoming data
+boolean stringComplete = false;  // whether the string is complete
+boolean valid_input = false;
+String serialInput = "";
+String sRego = "";
+int iNode = 0;
 
 //************************************ Load Drivers ****************************************
 //  load driver instance of the radio and name it "rf95"
@@ -126,6 +135,11 @@ void loop()
   {
     timeCtr = millis();
   }
+  //process any serial input
+  serialEvent();            // call the function
+  if (stringComplete)       // keep all serial processing in one place
+    process_serial();
+
 }
 
 //*******************************************************************************************
@@ -147,4 +161,77 @@ void send_radio_msg(char rego[])
 
 }
 
+// *************************************************************************************************
+void serialEvent() {
+  while (Serial.available()) { // keep on reading while info is available
+    // get the new byte:
+    char inByte = Serial.read();
+
+    // add it to the inputString:
+    if ((inByte >= 65 && inByte <= 90) || (inByte >= 97 && inByte <= 122) || (inByte >= 48 && inByte <= 57) || inByte == 43 || inByte == 44 || inByte == 45 || inByte == 46 || inByte == 61 || inByte == 63) {
+      inputString.concat(inByte);
+    }
+    if (inByte == 10 || inByte == 13) {
+      // user hit enter or such like
+      Serial.println(inputString);
+      stringComplete = true;
+    }
+  }
+}
+
+// ************************************************************************************************
+void process_serial()
+{
+  valid_input = false;
+
+  // A serial input starting with 'R-' is a registration update
+  if (inputString.substring(0, 2) == "R-")
+  {
+    serialInput = inputString.substring(2);
+    serialInput.toUpperCase();
+    // Make sure it is at least 6 characters
+    while (serialInput.length() < LENGTH_REGO)
+    {
+      serialInput.concat(" ");
+    }
+    // Reduce length if too long
+    sRego = serialInput.substring(0, LENGTH_REGO);
+    Serial.print("Rego update - ");
+
+    sRego.toCharArray(registration, LENGTH_REGO + 1);
+    EEPROM.put(REGISTRATION, registration);     // update registration
+    Serial.println(registration);
+    valid_input = true;
+  }
+
+  // A serial input starting with 'N-' is a node number update
+  if (inputString.substring(0, 2) == "N-")
+  {
+    serialInput = inputString.substring(2);
+    iNode = serialInput.toInt();
+
+    // 0 if return if string is invalid
+    if (iNode != 0)
+    {
+      Serial.print("Node number update - ");
+      node = iNode;
+      EEPROM.put(NODE, node);                     // update node
+      Serial.println(node);
+      valid_input = true;
+    }
+  }
+
+  if (!valid_input)
+  {
+    Serial.println("Invalid serial input");
+    Serial.println("To update the registration number, enter R-XXXNNN where XXXNNN is the registration number");
+    Serial.println("To update the node number, enter N-nnnn where nnnn is the node nuber number");
+    Serial.println("Thanks from the Auckland Council IoT team");
+    Serial.println();
+  }
+
+  // clear the string:
+  inputString = "";
+  stringComplete = false;
+}
 

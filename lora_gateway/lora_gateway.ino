@@ -102,7 +102,7 @@ void loop()
         String inNode = radioIn.substring(2, strIndex);
         Serial.print(inNode);
 
-        // Now the vehicl registration
+        // Now the vehicle registration
         // the string the string continues with comma, then the registration number
         prevIndex = strIndex;
         strIndex = radioIn.indexOf(',', prevIndex + 1);
@@ -111,13 +111,22 @@ void loop()
         Serial.print(",\x22vehicleRegistration\x22:\x22");
         Serial.print(inReg);
 
+        // Now the vehicle RSSI
+        // tthe string continues with comma, then the vehicle RSSI
+        prevIndex = strIndex;
+        strIndex = radioIn.indexOf(',', prevIndex + 1);
+        String inRSSI = radioIn.substring(prevIndex + 1, strIndex);
+        //Serial.print(" with registration ");
+        Serial.print("\x22,\x22vehicleRSSI\x22:");
+        Serial.print(inRSSI);
+
         // next the parking node number
         // the string the string continues with comma, then the parking sensor node number
         prevIndex = strIndex;
         strIndex = radioIn.indexOf(',', prevIndex + 1);
         String parkNode = radioIn.substring(prevIndex + 1, strIndex);
         //Serial.print(" from parking sensor ");
-        Serial.print("\x22,\x22parkingNode\x22:");
+        Serial.print(",\x22parkingNode\x22:");
         Serial.print(parkNode);
 
         // next the parking reference
@@ -130,7 +139,7 @@ void loop()
         Serial.print(parkRef);
 
         //Serial.print(" RSSI is ");
-        Serial.print("\x22,\x22RSSI\x22:");
+        Serial.print("\x22,\x22Parking_RSSI\x22:");
         inRSSI = rf95.lastRssi();
         Serial.print(inRSSI);
         Serial.println('}');
@@ -143,5 +152,4 @@ void loop()
     digitalWrite(led, LOW);
   }
 }
-
 
